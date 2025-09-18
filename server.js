@@ -159,7 +159,7 @@ app.post('/api/checkout', async (req, res) => {
   if (!stripe) return res.status(500).json({ error: 'Stripe not configured' });
 
   const { email, plan } = req.body || {};
-  if (!email || !plan || !['monthly', 'annual'].includes(plan)) {
+  if (!email || !['monthly', 'annual'].includes(plan)) {
     return res.status(400).json({ error: 'email and plan=monthly|annual required' });
   }
 
@@ -208,7 +208,9 @@ async function harvest() {
             author: lead.author,
             budget: lead.budget,
             score: lead.score,
-            // techStack and other fields can be added here if available from fetchReddit
+            company: lead.company, // New field
+            location: lead.location, // New field
+            techStack: lead.techStack, // New field
           },
         });
         if (createdLead) newRows++;

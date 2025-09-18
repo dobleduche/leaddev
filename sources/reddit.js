@@ -15,8 +15,8 @@ export async function fetchReddit(subsCsv) {
       const posts = (j.data?.children || []).map(c => c.data);
       for (const p of posts) {
         const content = [p.title, p.selftext].filter(Boolean).join(' — ');
-        const scored = scorePost({ content, created_utc: p.created_utc });
-        if (scored > 0) {
+        const { score, company, location, techStack } = scorePost({ content, created_utc: p.created_utc });
+        if (score > 0) { // Only include leads with a positive score
           results.push({
             platform: 'Reddit',
             title: p.title?.slice(0, 180) || 'Untitled',
@@ -24,7 +24,10 @@ export async function fetchReddit(subsCsv) {
             author: p.author || 'unknown',
             url: `https://reddit.com${p.permalink}`,
             budget: (content.match(/\$[0-9][0-9,]*/)?.[0]) || '',
-            score: scored
+            score: score,
+            company: company,
+            location: location,
+            techStack: techStack,
           });
         }
       }

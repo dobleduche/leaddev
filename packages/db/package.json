@@ -1,0 +1,20 @@
+{
+  "name": "db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "postinstall": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "node --loader ts-node/esm prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.x"
+  },
+  "devDependencies": {
+    "prisma": "^5.x",
+    "ts-node": "^10.x",
+    "typescript": "^5.x"
+  }
+}

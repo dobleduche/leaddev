@@ -1,0 +1,29 @@
+{
+  "name": "api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "fastify": "^4.x",
+    "@trpc/server": "^10.x",
+    "node-fetch": "^3.3.2",
+    "stripe": "^18.5.0",
+    "zod": "^3.x"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.x",
+    "@types/stripe": "^8.0.417",
+    "nodemon": "^3.1.10",
+    "typescript": "^5.x"
+  }
+}

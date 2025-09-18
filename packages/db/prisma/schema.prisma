@@ -1,0 +1,206 @@
+// packages/db/prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  passwordHash   String?
+  firstName      String?
+  lastName       String?
+  avatarUrl      String?
+  stripeCustomerId String?   @unique
+  subscriptionStatus String  @default("trial") // e.g., 'trial', 'active', 'canceled', 'past_due'
+  trialStartTs   DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  memberships    Membership[]
+  leads          Lead[] // Leads created/managed by this user
+  auditLogs      AuditLog[]
+}
+
+model Org {
+  id             String       @id @default(cuid())
+  name           String
+  slug           String       @unique
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  memberships    Membership[]
+  leads          Lead[] // Leads belonging to this organization
+  webhooks       Webhook[]
+  auditLogs      AuditLog[]
+}
+
+model Membership {
+  id             String    @id @default(cuid())
+  userId         String
+  orgId          String
+  role           String    @default("viewer") // e.g., 'owner', 'admin', 'agent', 'viewer'
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org            Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgId])
+}
+
+model Lead {
+  id             String    @id @default(cuid())
+  source         String
+  title          String
+  summary        String?
+  rawUrl         String    @unique
+  author         String?
+  company        String?
+  location       String?
+  budget         String?
+  techStack      String[]  @default([]) @db.Array(Text)
+  createdAt      DateTime  @default(now())
+  discoveredAt   DateTime  @default(now())
+  score          Float     @default(0.0)
+  status         String    @default("new") // e.g., 'new', 'claimed', 'contacted', 'replied', 'won', 'lost'
+
+  // Relationships
+  userId         String? // User who discovered/claimed this lead
+  orgId          String? // Organization this lead belongs to
+  user           User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  org            Org?      @relation(fields: [orgId], references: [id], onDelete: SetNull)
+
+  enrichments    LeadEnrichment[]
+  scores         LeadScore[]
+  claims         LeadClaim[]
+  contacts       LeadContact[]
+  notes          LeadNote[]
+  sequenceEvents SequenceEvent[]
+
+  @@index([createdAt(sort: Desc)])
+  @@index([score(sort: Desc)])
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin) // For trigram search
+  @@index([summary(ops: raw("gin_trgm_ops"))], type: Gin) // For trigram search
+}
+
+model LeadEnrichment {
+  id             String    @id @default(cuid())
+  leadId         String
+  provider       String
+  data           Json
+  createdAt      DateTime  @default(now())
+
+  lead           Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+}
+
+model LeadScore {
+  id             String    @id @default(cuid())
+  leadId         String
+  ruleScore      Float
+  mlScore        Float
+  finalScore     Float
+  version        String    @default("v1")
+  createdAt      DateTime  @default(now())
+
+  lead           Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+}
+
+model LeadClaim {
+  id             String    @id @default(cuid())
+  leadId         String
+  userId         String
+  claimedAt      DateTime  @default(now())
+
+  lead           Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, userId])
+}
+
+model LeadContact {
+  id             String    @id @default(cuid())
+  leadId         String
+  type           String    // e.g., 'email', 'linkedin', 'twitter', 'github'
+  value          String
+  confidence     Float     @default(0.0) // 0.0 to 1.0
+  verifiedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  lead           Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+}
+
+model LeadNote {
+  id             String    @id @default(cuid())
+  leadId         String
+  userId         String
+  content        String
+  createdAt      DateTime  @default(now())
+
+  lead           Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Webhook {
+  id             String    @id @default(cuid())
+  orgId          String
+  event          String    // e.g., 'lead.qualified', 'lead.claimed'
+  url            String
+  secret         String    // For HMAC signing
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  org            Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  deliveries     WebhookDelivery[]
+}
+
+model WebhookDelivery {
+  id             String    @id @default(cuid())
+  webhookId      String
+  payload        Json
+  status         String    // e.g., 'pending', 'success', 'failed'
+  statusCode     Int?
+  response       String?
+  attempts       Int       @default(0)
+  lastAttemptAt  DateTime  @default(now())
+
+  webhook        Webhook   @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  attemptsHistory WebhookAttempt[]
+}
+
+model WebhookAttempt {
+  id             String    @id @default(cuid())
+  deliveryId     String
+  attemptNumber  Int
+  statusCode     Int?
+  response       String?
+  attemptedAt    DateTime  @default(now())
+
+  delivery       WebhookDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id             String    @id @default(cuid())
+  orgId          String?
+  userId         String?
+  action         String
+  entityType     String
+  entityId       String
+  payload        Json
+  ipAddress      String?
+  createdAt      DateTime  @default(now())
+
+  org            Org?      @relation(fields: [orgId], references: [id], onDelete: SetNull)
+  user           User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt(sort: Desc)])
+}
+
+// Add other models as needed based on the full spec (e.g., Providers, Jobs, Runs, RateLimits, Sequences, etc.)

@@ -16,7 +16,8 @@
     "@trpc/server": "^10.x",
     "node-fetch": "^3.3.2",
     "stripe": "^18.5.0",
-    "zod": "^3.x"
+    "zod": "^3.x",
+    "db": "workspace:*"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

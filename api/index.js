@@ -2,8 +2,9 @@
 import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
-import { stmt } from '../db.js';
 import { fetchReddit } from '../sources/reddit.js';
+import Stripe from 'stripe';
+import { prisma } from 'db'; // Import Prisma client
 
 const app = express();
 app.use(cors());
@@ -13,30 +14,58 @@ app.use(express.json());
 app.get('/health', (_req, res) => res.json({ ok: true, uptime: process.uptime() }));
 
 // auth-lite
-app.post('/api/signup', (req, res) => {
+app.post('/api/signup', async (req, res) => {
   const { email } = req.body || {};
   if (!email || !/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: 'valid email required' });
-  const now = Date.now();
-  const user = stmt.upsertUserByEmail.get(email, now);
-  res.json({ ok: true, user: { email: user.email, status: user.subscription_status } });
+  const now = new Date();
+  try {
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: { updatedAt: now },
+      create: { email, trialStartTs: now, subscriptionStatus: 'trial' },
+    });
+    res.json({ ok: true, user: { email: user.email, status: user.subscriptionStatus } });
+  } catch (e) {
+    console.error('Signup error:', e);
+    res.status(500).json({ error: 'Signup failed' });
+  }
 });
 
-app.get('/api/me', (req, res) => {
+app.get('/api/me', async (req, res) => {
   const { email } = req.query || {};
-  const user = email ? stmt.getUserByEmail.get(email) : null;
-  res.json({ user: user ? { email: user.email, status: user.subscription_status } : null });
+  if (!email) {
+    return res.json({ user: null });
+  }
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email: String(email) },
+      select: { email: true, subscriptionStatus: true },
+    });
+    res.json({ user: user ? { email: user.email, status: user.subscriptionStatus } : null });
+  } catch (e) {
+    console.error('Get user error:', e);
+    res.status(500).json({ error: 'Failed to fetch user' });
+  }
 });
 
 // leads
-app.get('/api/leads', (req, res) => {
+app.get('/api/leads', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit || '50', 10), 100);
   const offset = Math.max(parseInt(req.query.offset || '0', 10), 0);
-  const rows = stmt.latestLeads.all(limit, offset);
-  res.json(rows);
+  try {
+    const leads = await prisma.lead.findMany({
+      take: limit,
+      skip: offset,
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(leads);
+  } catch (e) {
+    console.error('Fetch leads error:', e);
+    res.status(500).json({ error: 'Failed to fetch leads' });
+  }
 });
 
 // checkout
-import Stripe from 'stripe';
 const {
   STRIPE_SECRET,
   PRICE_MONTHLY,
@@ -55,6 +84,13 @@ app.post('/api/checkout', async (req, res) => {
   try {
     let customer = (await stripe.customers.list({ email, limit: 1 })).data[0];
     if (!customer) customer = await stripe.customers.create({ email });
+
+    // Update user with stripeCustomerId
+    await prisma.user.updateMany({
+      where: { email },
+      data: { stripeCustomerId: customer.id },
+    });
+
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: customer.id,

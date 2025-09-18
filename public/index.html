@@ -42,6 +42,54 @@
     .field-value.tech-stack {
       white-space: normal;
     }
+    .auth-section {
+      margin-top: 12px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+    }
+    .auth-section input {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+    .auth-section button {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: none;
+      color: #fff;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    .auth-section button.primary {
+      background: #111;
+    }
+    .auth-section button.primary:hover {
+      background: #333;
+    }
+    .auth-section button.secondary {
+      background: #dc3545;
+    }
+    .auth-section button.secondary:hover {
+      background: #c82333;
+    }
+    .auth-section button.buy-button {
+      background: #0ea5e9;
+    }
+    .auth-section button.buy-button:hover {
+      background: #0284c7;
+    }
+    .auth-section button.buy-annual {
+      background: #22c55e;
+    }
+    .auth-section button.buy-annual:hover {
+      background: #16a34a;
+    }
+    .user-info {
+      color: #333;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -49,11 +97,17 @@
     <div class="header">
       <h1>🤖 Freelance Signal Bot</h1>
       <p>Real-time qualified leads (Reddit) — 3-day free trial, then $9.99/mo or $85/yr</p>
-      <div style="margin-top:12px">
-        <input id="email" placeholder="you@example.com" style="padding:8px 12px;border-radius:6px;border:none;"/>
-        <button id="signup" style="padding:8px 12px;border-radius:6px;border:none;background:#111;color:#fff">Start Trial</button>
-        <button id="buy-monthly" style="padding:8px 12px;border-radius:6px;border:none;background:#0ea5e9;color:#fff">$9.99/mo</button>
-        <button id="buy-annual" style="padding:8px 12px;border-radius:6px;border:none;background:#22c55e;color:#fff">$85/year</button>
+      <div class="auth-section">
+        <div id="auth-logged-out">
+          <input id="email" type="email" placeholder="you@example.com"/>
+          <button id="signup-login-btn" class="primary">Sign Up / Log In</button>
+        </div>
+        <div id="auth-logged-in" style="display: none;">
+          <span class="user-info" id="user-email"></span>
+          <button id="logout-btn" class="secondary">Log Out</button>
+          <button id="buy-monthly" class="buy-button">$9.99/mo</button>
+          <button id="buy-annual" class="buy-annual">$85/year</button>
+        </div>
       </div>
     </div>
 
@@ -74,15 +128,30 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
+    const SUPABASE_URL = "https://slosefmnqwohkzeiblbb.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsb3NlZm1ucXdvaGt6ZWlibGJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzNTM3NjIsImV4cCI6MjA2NzkyOTc2Mn0.2Ozs9SUw8VLSe5MhetsuLQ3gMlOS420homDBApVTAfU";
+
+    const supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
     const discordContent = document.getElementById('discordContent');
     const log = document.getElementById('log');
+    const emailInput = document.getElementById('email');
+    const signupLoginBtn = document.getElementById('signup-login-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const authLoggedOut = document.getElementById('auth-logged-out');
+    const authLoggedIn = document.getElementById('auth-logged-in');
+    const userEmailSpan = document.getElementById('user-email');
+    const buyMonthlyBtn = document.getElementById('buy-monthly');
+    const buyAnnualBtn = document.getElementById('buy-annual');
 
     function logLine(text, cls='info'){
       const div=document.createElement('div');
       div.className='log-entry '+cls;
       div.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
       log.appendChild(div);
+      log.scrollTop = log.scrollHeight; // Auto-scroll to bottom
     }
 
     function leadCard(lead){
@@ -119,23 +188,56 @@
     setInterval(refresh, 15000);
     refresh();
 
-    document.getElementById('signup').onclick = async () => {
-      const email = document.getElementById('email').value.trim();
-      if(!email) return alert('enter email');
-      const r = await fetch('/api/signup',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email})});
-      const j = await r.json();
-      if (j.ok) logLine(`Signed up ${email} — status: ${j.user.status}`, 'success');
-      else alert(j.error || 'signup failed');
+    // Supabase Auth Logic
+    supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        authLoggedOut.style.display = 'none';
+        authLoggedIn.style.display = 'flex';
+        userEmailSpan.textContent = session.user.email;
+        logLine(`User logged in: ${session.user.email}`, 'success');
+      } else {
+        authLoggedOut.style.display = 'flex';
+        authLoggedIn.style.display = 'none';
+        userEmailSpan.textContent = '';
+        logLine('User logged out.', 'info');
+      }
+    });
+
+    signupLoginBtn.onclick = async () => {
+      const email = emailInput.value.trim();
+      if (!email) {
+        alert('Please enter your email address.');
+        return;
+      }
+      try {
+        const { error } = await supabase.auth.signInWithOtp({ email });
+        if (error) throw error;
+        logLine('Check your email for a magic link to log in!', 'info');
+      } catch (error) {
+        logLine(`Auth error: ${error.message}`, 'error');
+        alert(error.message);
+      }
     };
+
+    logoutBtn.onclick = async () => {
+      try {
+        const { error } = await supabase.auth.signOut();
+        if (error) throw error;
+      } catch (error) {
+        logLine(`Logout error: ${error.message}`, 'error');
+        alert(error.message);
+      }
+    };
+
     async function checkout(plan){
-      const email = document.getElementById('email').value.trim();
-      if(!email) return alert('enter email first (used in Stripe)');
+      const email = userEmailSpan.textContent.trim(); // Use the logged-in user's email
+      if(!email) return alert('Please log in first to proceed with checkout.');
       const r = await fetch('/api/checkout',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email, plan})});
       const j = await r.json();
       if (j.url) window.location = j.url; else alert(j.error || 'checkout failed');
     }
-    document.getElementById('buy-monthly').onclick = ()=>checkout('monthly');
-    document.getElementById('buy-annual').onclick = ()=>checkout('annual');
+    buyMonthlyBtn.onclick = ()=>checkout('monthly');
+    buyAnnualBtn.onclick = ()=>checkout('annual');
 
     logLine('UI loaded. Fetching leads...', 'info');
   </script>

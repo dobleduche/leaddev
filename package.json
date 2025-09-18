@@ -1,0 +1,28 @@
+{
+  "name": "freelance-signal-bot",
+  "version": "1.0.0",
+  "description": "Freelance Signal Bot SaaS - scans posts, scores them, and exposes API for leads.",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "build": "echo \"No build step yet\""
+  },
+  "dependencies": {
+    "axios": "^1.12.2",
+    "better-sqlite3": "^12.2.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "node-fetch": "^3.3.2",
+    "sqlite3": "^5.1.7",
+    "stripe": "^18.5.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "routes": [
+    { "src": "^/api/stripe/webhook$", "dest": "/api/stripe-webhook.js" },
+    { "src": "^/api/.*", "dest": "/api/index.js" },
+    { "src": "^(?!/api/).*$", "dest": "/index.html" }
+  ]
+}

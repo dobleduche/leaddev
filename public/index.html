@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Freelance Signal Bot – Live Leads</title>
+  <style>
+    /* keep your styles — truncated for brevity */
+    body{font-family:system-ui,Segoe UI,Tahoma,Arial;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;padding:20px}
+    /* ... (your existing CSS) ... */
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🤖 Freelance Signal Bot</h1>
+      <p>Real-time qualified leads (Reddit) — 3-day free trial, then $9.99/mo or $85/yr</p>
+      <div style="margin-top:12px">
+        <input id="email" placeholder="you@example.com" style="padding:8px 12px;border-radius:6px;border:none;"/>
+        <button id="signup" style="padding:8px 12px;border-radius:6px;border:none;background:#111;color:#fff">Start Trial</button>
+        <button id="buy-monthly" style="padding:8px 12px;border-radius:6px;border:none;background:#0ea5e9;color:#fff">$9.99/mo</button>
+        <button id="buy-annual" style="padding:8px 12px;border-radius:6px;border:none;background:#22c55e;color:#fff">$85/year</button>
+      </div>
+    </div>
+
+    <div class="demo-container">
+      <div class="dashboard">
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-number" id="totalScanned">0</div><div class="stat-label">Posts Scanned (DB)</div></div>
+          <div class="stat-card"><div class="stat-number" id="qualifiedLeads">0</div><div class="stat-label">Qualified Leads</div></div>
+          <div class="stat-card"><div class="stat-number" id="avgScore">0.0</div><div class="stat-label">Average Score</div></div>
+        </div>
+        <div class="activity-log" id="log"><h3 style="margin-bottom:15px;color:#333;">📊 Activity</h3></div>
+      </div>
+
+      <div class="discord-mockup">
+        <div class="discord-header"># 🎯-qualified-leads</div>
+        <div class="discord-content" id="discordContent"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const discordContent = document.getElementById('discordContent');
+    const log = document.getElementById('log');
+
+    function logLine(text, cls='info'){
+      const div=document.createElement('div');
+      div.className='log-entry '+cls;
+      div.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+      log.appendChild(div);
+    }
+
+    function leadCard(lead){
+      const border = lead.score >= 8 ? 'high-score' : (lead.score >= 6 ? 'medium-score' : 'low-score');
+      return `
+        <div class="lead-card ${border}">
+          <div class="lead-header">
+            <div class="lead-title">${lead.title}</div>
+            <div class="lead-content">${lead.content || ''}</div>
+          </div>
+          <div class="lead-fields">
+            <div class="field"><div class="field-label">📊 SCORE</div><div class="field-value">${lead.score}</div></div>
+            <div class="field"><div class="field-label">💰 BUDGET</div><div class="field-value">${lead.budget || '—'}</div></div>
+            <div class="field"><div class="field-label">👤 AUTHOR</div><div class="field-value">${lead.author || '—'}</div></div>
+            <div class="field"><div class="field-label">🔗 LINK</div><div class="field-value"><a style="color:#00aff4" href="${lead.url}" target="_blank">open</a></div></div>
+          </div>
+          <div class="lead-footer"><span>Freelance Signal Bot</span><span>${new Date(lead.created_ts||Date.now()).toLocaleTimeString()}</span></div>
+        </div>`;
+    }
+
+    async function refresh(){
+      const res = await fetch('/api/leads?limit=50');
+      const leads = await res.json();
+      document.getElementById('qualifiedLeads').textContent = leads.length;
+      document.getElementById('totalScanned').textContent = leads.length;
+      const avg = leads.length ? (leads.reduce((a,b)=>a+b.score,0)/leads.length).toFixed(1) : '0.0';
+      document.getElementById('avgScore').textContent = avg;
+      discordContent.innerHTML = leads.map(leadCard).join('');
+    }
+
+    setInterval(refresh, 15000);
+    refresh();
+
+    document.getElementById('signup').onclick = async () => {
+      const email = document.getElementById('email').value.trim();
+      if(!email) return alert('enter email');
+      const r = await fetch('/api/signup',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email})});
+      const j = await r.json();
+      if (j.ok) logLine(`Signed up ${email} — status: ${j.user.status}`, 'success');
+      else alert(j.error || 'signup failed');
+    };
+    async function checkout(plan){
+      const email = document.getElementById('email').value.trim();
+      if(!email) return alert('enter email first (used in Stripe)');
+      const r = await fetch('/api/checkout',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email, plan})});
+      const j = await r.json();
+      if (j.url) window.location = j.url; else alert(j.error || 'checkout failed');
+    }
+    document.getElementById('buy-monthly').onclick = ()=>checkout('monthly');
+    document.getElementById('buy-annual').onclick = ()=>checkout('annual');
+
+    logLine('UI loaded. Fetching leads...', 'info');
+  </script>
+</body>
+</html>

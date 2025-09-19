@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,247 +7,241 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// New Profile model mapping to public.profiles
-model Profile {
-  id                  String    @id @db.Uuid @map("id")
-  firstName           String?   @map("first_name")
-  lastName            String?   @map("last_name")
-  avatarUrl           String?   @map("avatar_url")
-  stripeCustomerId    String?   @map("stripe_customer_id")
-  subscriptionStatus  String    @default("trial") @map("subscription_status")
-  trialStartTs        DateTime? @map("trial_start_ts") @db.Timestamptz(6)
-  updatedAt           DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
-  createdAt           DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  // Relationships to other tables that now reference profiles
-  memberships         Membership[]
-  leads               Lead[]
-  leadClaims          LeadClaim[]
-  leadNotes           LeadNote[]
-  auditLogs           AuditLog[]
-
-  @@map("profiles")
+model Keyword {
+  id         String    @id @default(uuid()) @map("id") @db.Uuid
+  created_at DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  keyword    String    @map("keyword") @db.Text
+  volume     Int?      @default(0) @map("volume") @db.Integer
+  difficulty Int?      @default(0) @map("difficulty") @db.Integer
+  intent     String?   @default("informational") @map("intent") @db.Text
+  status     String?   @default("active") @map("status") @db.Text
 }
 
--- Existing models, updated to reference Profile where applicable
-model Lead {
-  id          String      @id @default(cuid())
-  source      String
-  title       String
-  summary     String?
-  rawUrl      String      @unique
-  author      String?
-  company     String?
-  location    String?
-  budget      String?
-  techStack   String[]    @default([]) @db.Text
-  createdAt   DateTime    @default(now())
-  discoveredAt DateTime   @default(now())
-  score       Float       @default(0.0)
-  status      String      @default("new")
-  userId      String?     @db.Uuid // Changed to UUID
-  orgId       String?
+model AuditLog {
+  id          String    @id @default(uuid()) @map("id") @db.Text
+  orgId       String?   @map("orgId") @db.Text
+  userId      String?   @map("userId") @db.Uuid // Changed to UUID
+  action      String    @map("action") @db.Text
+  entityType  String    @map("entityType") @db.Text
+  entityId    String    @map("entityId") @db.Text
+  payload     Json      @map("payload") @db.Jsonb
+  ipAddress   String?   @map("ipAddress") @db.Text
+  createdAt   DateTime  @default(now()) @map("createdAt") @db.Timestamptz(6)
+  // Relation to Profile
+  user        Profile?  @relation(fields: [userId], references: [id])
 
-  // Relationship to Profile
-  user        Profile?    @relation(fields: [userId], references: [id])
-
-  leadEnrichments LeadEnrichment[]
-  leadScores      LeadScore[]
-  leadClaims      LeadClaim[]
-  leadContacts    LeadContact[]
-  leadNotes       LeadNote[]
-
-  @@map("lead")
-}
-
-model LeadEnrichment {
-  id        String    @id @default(cuid())
-  leadId    String
-  provider  String
-  data      Json
-  createdAt DateTime  @default(now())
-
-  lead      Lead      @relation(fields: [leadId], references: [id])
-
-  @@map("leadenrichment")
-}
-
-model LeadScore {
-  id        String    @id @default(cuid())
-  leadId    String
-  ruleScore Float
-  mlScore   Float
-  finalScore Float
-  version   String    @default("v1")
-  createdAt DateTime  @default(now())
-
-  lead      Lead      @relation(fields: [leadId], references: [id])
-
-  @@map("leadscore")
-}
-
-model LeadClaim {
-  id        String    @id @default(cuid())
-  leadId    String
-  userId    String    @db.Uuid // Changed to UUID
-  claimedAt DateTime  @default(now())
-
-  lead      Lead      @relation(fields: [leadId], references: [id])
-  user      Profile   @relation(fields: [userId], references: [id]) // Relationship to Profile
-
-  @@map("leadclaim")
-}
-
-model LeadContact {
-  id         String    @id @default(cuid())
-  leadId     String
-  type       String
-  value      String
-  confidence Float     @default(0.0)
-  verifiedAt DateTime?
-  createdAt  DateTime  @default(now())
-
-  lead       Lead      @relation(fields: [leadId], references: [id])
-
-  @@map("leadcontact")
+  @@map("auditlog")
 }
 
 model LeadNote {
-  id        String    @id @default(cuid())
-  leadId    String
-  userId    String    @db.Uuid // Changed to UUID
-  content   String
-  createdAt DateTime  @default(now())
-
-  lead      Lead      @relation(fields: [leadId], references: [id])
-  user      Profile   @relation(fields: [userId], references: [id]) // Relationship to Profile
+  id        String    @id @default(uuid()) @map("id") @db.Text
+  leadId    String    @map("leadId") @db.Text
+  userId    String    @map("userId") @db.Uuid // Changed to UUID
+  content   String    @map("content") @db.Text
+  createdAt DateTime  @default(now()) @map("createdAt") @db.Timestamptz(6)
+  // Relations
+  lead      Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user      Profile   @relation(fields: [userId], references: [id])
 
   @@map("leadnote")
 }
 
-model Webhook {
-  id          String           @id @default(cuid())
-  orgId       String
-  event       String
-  url         String
-  secret      String
-  isActive    Boolean          @default(true)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+model LeadClaim {
+  id        String    @id @default(uuid()) @map("id") @db.Text
+  leadId    String    @map("leadId") @db.Text
+  userId    String    @map("userId") @db.Uuid // Changed to UUID
+  claimedAt DateTime  @default(now()) @map("claimedAt") @db.Timestamptz(6)
+  // Relations
+  lead      Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user      Profile   @relation(fields: [userId], references: [id])
 
-  webhookDeliveries WebhookDelivery[]
+  @@map("leadclaim")
+}
 
-  @@map("webhook")
+model Lead {
+  id             String          @id @default(uuid()) @map("id") @db.Text
+  source         String          @map("source") @db.Text
+  title          String          @map("title") @db.Text
+  summary        String?         @map("summary") @db.Text
+  rawUrl         String          @unique @map("rawUrl") @db.Text
+  author         String?         @map("author") @db.Text
+  company        String?         @map("company") @db.Text
+  location       String?         @map("location") @db.Text
+  budget         String?         @map("budget") @db.Text
+  techStack      String[]        @default([]) @map("techStack") @db.Text
+  createdAt      DateTime        @default(now()) @map("createdAt") @db.Timestamptz(6)
+  discoveredAt   DateTime        @default(now()) @map("discoveredAt") @db.Timestamptz(6)
+  score          Float           @default(0.0) @map("score") @db.DoublePrecision
+  status         String          @default("new") @map("status") @db.Text
+  userId         String?         @map("userId") @db.Uuid // Changed to UUID
+  orgId          String?         @map("orgId") @db.Text
+  // Relations
+  user           Profile?        @relation(fields: [userId], references: [id])
+  org            Org?            @relation(fields: [orgId], references: [id])
+  leadNotes      LeadNote[]
+  leadClaims     LeadClaim[]
+  leadEnrichments LeadEnrichment[]
+  leadScores     LeadScore[]
+  leadContacts   LeadContact[]
+
+  @@map("lead")
+}
+
+model Membership {
+  id        String    @id @default(uuid()) @map("id") @db.Text
+  userId    String    @map("userId") @db.Uuid // Changed to UUID
+  orgId     String    @map("orgId") @db.Text
+  role      String    @default("viewer") @map("role") @db.Text
+  createdAt DateTime  @default(now()) @map("createdAt") @db.Timestamptz(6)
+  updatedAt DateTime  @default(now()) @map("updatedAt") @db.Timestamptz(6)
+  // Relations
+  user      Profile   @relation(fields: [userId], references: [id])
+  org       Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgId])
+  @@map("membership")
+}
+
+model Profile {
+  id                 String      @id @map("id") @db.Uuid
+  first_name         String?     @map("first_name") @db.Text
+  last_name          String?     @map("last_name") @db.Text
+  avatar_url         String?     @map("avatar_url") @db.Text
+  stripe_customer_id String?     @unique @map("stripe_customer_id") @db.Text
+  subscription_status String     @default("trial") @map("subscription_status") @db.Text
+  trial_start_ts     DateTime?   @map("trial_start_ts") @db.Timestamptz(6)
+  updated_at         DateTime?   @default(now()) @map("updated_at") @db.Timestamptz(6)
+  created_at         DateTime?   @default(now()) @map("created_at") @db.Timestamptz(6)
+  // Relations
+  memberships        Membership[]
+  leads              Lead[]
+  leadClaims         LeadClaim[]
+  leadNotes          LeadNote[]
+  auditLogs          AuditLog[]
+
+  @@map("profiles")
 }
 
 model WebhookDelivery {
-  id            String           @id @default(cuid())
-  webhookId     String
-  payload       Json
-  status        String
-  statusCode    Int?
-  response      String?
-  attempts      Int              @default(0)
-  lastAttemptAt DateTime         @default(now())
-
-  webhook       Webhook          @relation(fields: [webhookId], references: [id])
-  webhookAttempts WebhookAttempt[]
+  id          String    @id @default(uuid()) @map("id") @db.Text
+  webhookId   String    @map("webhookId") @db.Text
+  payload     Json      @map("payload") @db.Jsonb
+  status      String    @map("status") @db.Text
+  statusCode  Int?      @map("statusCode") @db.Integer
+  response    String?   @map("response") @db.Text
+  attempts    Int       @default(0) @map("attempts") @db.Integer
+  lastAttemptAt DateTime @default(now()) @map("lastAttemptAt") @db.Timestamptz(6)
+  // Relations
+  webhook     Webhook   @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  attemptsRel WebhookAttempt[]
 
   @@map("webhookdelivery")
 }
 
-model WebhookAttempt {
-  id          String    @id @default(cuid())
-  deliveryId  String
-  attemptNumber Int
-  statusCode  Int?
-  response    String?
-  attemptedAt DateTime  @default(now())
+model Webhook {
+  id        String    @id @default(uuid()) @map("id") @db.Text
+  orgId     String    @map("orgId") @db.Text
+  event     String    @map("event") @db.Text
+  url       String    @map("url") @db.Text
+  secret    String    @map("secret") @db.Text
+  isActive  Boolean   @default(true) @map("isActive") @db.Boolean
+  createdAt DateTime  @default(now()) @map("createdAt") @db.Timestamptz(6)
+  updatedAt DateTime  @default(now()) @map("updatedAt") @db.Timestamptz(6)
+  // Relations
+  org       Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
 
-  webhookDelivery WebhookDelivery @relation(fields: [deliveryId], references: [id])
+  @@map("webhook")
+}
 
-  @@map("webhookattempt")
+model LeadContact {
+  id         String    @id @default(uuid()) @map("id") @db.Text
+  leadId     String    @map("leadId") @db.Text
+  type       String    @map("type") @db.Text
+  value      String    @map("value") @db.Text
+  confidence Float     @default(0.0) @map("confidence") @db.DoublePrecision
+  verifiedAt DateTime? @map("verifiedAt") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("createdAt") @db.Timestamptz(6)
+  // Relations
+  lead       Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("leadcontact")
+}
+
+model LeadScore {
+  id         String    @id @default(uuid()) @map("id") @db.Text
+  leadId     String    @map("leadId") @db.Text
+  ruleScore  Float     @map("ruleScore") @db.DoublePrecision
+  mlScore    Float     @map("mlScore") @db.DoublePrecision
+  finalScore Float     @map("finalScore") @db.DoublePrecision
+  version    String    @default("v1") @map("version") @db.Text
+  createdAt  DateTime  @default(now()) @map("createdAt") @db.Timestamptz(6)
+  // Relations
+  lead       Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("leadscore")
+}
+
+model LeadEnrichment {
+  id        String    @id @default(uuid()) @map("id") @db.Text
+  leadId    String    @map("leadId") @db.Text
+  provider  String    @map("provider") @db.Text
+  data      Json      @map("data") @db.Jsonb
+  createdAt DateTime  @default(now()) @map("createdAt") @db.Timestamptz(6)
+  // Relations
+  lead      Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("leadenrichment")
 }
 
 model Org {
-  id          String       @id @default(cuid())
-  name        String
-  slug        String       @unique
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-
+  id         String       @id @default(uuid()) @map("id") @db.Text
+  name       String       @map("name") @db.Text
+  slug       String       @unique @map("slug") @db.Text
+  createdAt  DateTime     @default(now()) @map("createdAt") @db.Timestamptz(6)
+  updatedAt  DateTime     @default(now()) @map("updatedAt") @map("updatedAt") @db.Timestamptz(6)
+  // Relations
   memberships Membership[]
-  leads       Lead[]       @relation("OrgLeads")
-  auditLogs   AuditLog[]
+  leads       Lead[]
   webhooks    Webhook[]
 
   @@map("org")
 }
 
-model Membership {
-  id          String    @id @default(cuid())
-  userId      String    @db.Uuid // Changed to UUID
-  orgId       String
-  role        String    @default("viewer")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+model WebhookAttempt {
+  id          String    @id @default(uuid()) @map("id") @db.Text
+  deliveryId  String    @map("deliveryId") @db.Text
+  attemptNumber Int     @map("attemptNumber") @db.Integer
+  statusCode  Int?      @map("statusCode") @db.Integer
+  response    String?   @map("response") @db.Text
+  attemptedAt DateTime  @default(now()) @map("attemptedAt") @db.Timestamptz(6)
+  // Relations
+  delivery    WebhookDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
 
-  user        Profile   @relation(fields: [userId], references: [id]) // Relationship to Profile
-  org         Org       @relation(fields: [orgId], references: [id])
-
-  @@map("membership")
-}
-
-model AuditLog {
-  id          String    @id @default(cuid())
-  orgId       String?
-  userId      String?   @db.Uuid // Changed to UUID
-  action      String
-  entityType  String
-  entityId    String
-  payload     Json
-  ipAddress   String?
-  createdAt   DateTime  @default(now())
-
-  user        Profile?  @relation(fields: [userId], references: [id]) // Relationship to Profile
-  org         Org?      @relation(fields: [orgId], references: [id])
-
-  @@map("auditlog")
-}
-
-model Keyword {
-  id          String    @id @default(cuid())
-  createdAt   DateTime? @default(now())
-  keyword     String
-  volume      Int?      @default(0)
-  difficulty  Int?      @default(0)
-  intent      String?   @default("informational")
-  status      String?   @default("active")
-
-  @@map("keywords")
+  @@map("webhookattempt")
 }
 
 model Backlink {
-  id            String    @id @default(cuid())
-  createdAt     DateTime? @default(now())
-  url           String
-  domain        String
-  domainAuthority Int?    @default(0) @map("domain_authority")
-  status        String?   @default("pending")
-  anchorText    String?   @map("anchor_text")
-  platform      String?   @default("custom")
+  id               String    @id @default(uuid()) @map("id") @db.Uuid
+  created_at       DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  url              String    @map("url") @db.Text
+  domain           String    @map("domain") @db.Text
+  domain_authority Int?      @default(0) @map("domain_authority") @db.Integer
+  status           String?   @default("pending") @map("status") @db.Text
+  anchor_text      String?   @map("anchor_text") @db.Text
+  platform         String?   @default("custom") @map("platform") @db.Text
 
   @@map("backlinks")
 }
 
 model SeoMetric {
-  id            String    @id @default(cuid())
-  createdAt     DateTime? @default(now())
-  indexedPages  Int?      @default(0) @map("indexed_pages")
-  rankings      Int?      @default(0)
-  backlinks     Int?      @default(0)
-  traffic       Int?      @default(0)
-  updatedAt     DateTime? @default(now()) @map("updated_at")
+  id            String    @id @default(uuid()) @map("id") @db.Uuid
+  created_at    DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  indexed_pages Int?      @default(0) @map("indexed_pages") @db.Integer
+  rankings      Int?      @default(0) @map("rankings") @db.Integer
+  backlinks     Int?      @default(0) @map("backlinks") @db.Integer
+  traffic       Int?      @default(0) @map("traffic") @db.Integer
+  updated_at    DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
 
   @@map("seo_metrics")
 }

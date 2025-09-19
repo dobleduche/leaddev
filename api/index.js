@@ -19,12 +19,14 @@ app.post('/api/signup', async (req, res) => {
   if (!email || !/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: 'valid email required' });
   const now = new Date();
   try {
-    const user = await prisma.user.upsert({
-      where: { email },
-      update: { updatedAt: now },
-      create: { email, trialStartTs: now, subscriptionStatus: 'trial' },
-    });
-    res.json({ ok: true, user: { email: user.email, status: user.subscriptionStatus } });
+    // For signup, we rely on Supabase auth. This endpoint is now primarily for creating a profile entry
+    // if it doesn't exist, or updating it. The actual user creation is handled by Supabase.
+    // We'll need to get the Supabase user ID from the session or a secure context.
+    // For now, this endpoint will be simplified as the frontend handles Supabase signup.
+    // This endpoint will be updated to fetch/update the profile based on the authenticated user's ID.
+    // For the current flow, this endpoint is less relevant as Supabase handles the initial user creation.
+    // We'll keep it for now but note its future deprecation or modification.
+    res.status(200).json({ ok: true, message: 'Please use Supabase for signup/login. This endpoint will be updated.' });
   } catch (e) {
     console.error('Signup error:', e);
     res.status(500).json({ error: 'Signup failed' });
@@ -32,19 +34,19 @@ app.post('/api/signup', async (req, res) => {
 });
 
 app.get('/api/me', async (req, res) => {
-  const { email } = req.query || {};
-  if (!email) {
-    return res.json({ user: null });
+  const { userId } = req.query || {}; // Expecting Supabase user ID
+  if (!userId) {
+    return res.json({ profile: null });
   }
   try {
-    const user = await prisma.user.findUnique({
-      where: { email: String(email) },
-      select: { email: true, subscriptionStatus: true },
+    const profile = await prisma.profile.findUnique({
+      where: { id: String(userId) },
+      select: { id: true, firstName: true, lastName: true, subscriptionStatus: true },
     });
-    res.json({ user: user ? { email: user.email, status: user.subscriptionStatus } : null });
+    res.json({ profile: profile ? { id: profile.id, status: profile.subscriptionStatus } : null });
   } catch (e) {
-    console.error('Get user error:', e);
-    res.status(500).json({ error: 'Failed to fetch user' });
+    console.error('Get profile error:', e);
+    res.status(500).json({ error: 'Failed to fetch profile' });
   }
 });
 
@@ -76,8 +78,8 @@ const stripe = STRIPE_SECRET ? new Stripe(STRIPE_SECRET, { apiVersion: '2024-06-
 
 app.post('/api/checkout', async (req, res) => {
   if (!stripe) return res.status(500).json({ error: 'Stripe not configured' });
-  const { email, plan } = req.body || {};
-  if (!email || !['monthly','annual'].includes(plan)) return res.status(400).json({ error: 'email and plan=monthly|annual required' });
+  const { email, plan, userId } = req.body || {}; // Expecting userId from Supabase
+  if (!email || !userId || !['monthly','annual'].includes(plan)) return res.status(400).json({ error: 'email, userId, and plan=monthly|annual required' });
   const price = plan === 'monthly' ? PRICE_MONTHLY : PRICE_ANNUAL;
   if (!price) return res.status(500).json({ error: 'Stripe price IDs missing' });
 
@@ -85,9 +87,9 @@ app.post('/api/checkout', async (req, res) => {
     let customer = (await stripe.customers.list({ email, limit: 1 })).data[0];
     if (!customer) customer = await stripe.customers.create({ email });
 
-    // Update user with stripeCustomerId
-    await prisma.user.updateMany({
-      where: { email },
+    // Update profile with stripeCustomerId
+    await prisma.profile.update({
+      where: { id: userId },
       data: { stripeCustomerId: customer.id },
     });
 

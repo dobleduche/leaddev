@@ -1,8 +1,8 @@
-// packages/db/prisma/schema.prisma
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../node_modules/.prisma/client"
 }
 
 datasource db {
@@ -10,197 +10,247 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id             String    @id @default(cuid())
-  email          String    @unique
-  passwordHash   String?
-  firstName      String?
-  lastName       String?
-  avatarUrl      String?
-  stripeCustomerId String?   @unique
-  subscriptionStatus String  @default("trial") // e.g., 'trial', 'active', 'canceled', 'past_due'
-  trialStartTs   DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+// New Profile model mapping to public.profiles
+model Profile {
+  id                  String    @id @db.Uuid @map("id")
+  firstName           String?   @map("first_name")
+  lastName            String?   @map("last_name")
+  avatarUrl           String?   @map("avatar_url")
+  stripeCustomerId    String?   @map("stripe_customer_id")
+  subscriptionStatus  String    @default("trial") @map("subscription_status")
+  trialStartTs        DateTime? @map("trial_start_ts") @db.Timestamptz(6)
+  updatedAt           DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt           DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  memberships    Membership[]
-  leads          Lead[] // Leads created/managed by this user
-  auditLogs      AuditLog[]
+  // Relationships to other tables that now reference profiles
+  memberships         Membership[]
+  leads               Lead[]
+  leadClaims          LeadClaim[]
+  leadNotes           LeadNote[]
+  auditLogs           AuditLog[]
+
+  @@map("profiles")
 }
 
-model Org {
-  id             String       @id @default(cuid())
-  name           String
-  slug           String       @unique
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-
-  memberships    Membership[]
-  leads          Lead[] // Leads belonging to this organization
-  webhooks       Webhook[]
-  auditLogs      AuditLog[]
-}
-
-model Membership {
-  id             String    @id @default(cuid())
-  userId         String
-  orgId          String
-  role           String    @default("viewer") // e.g., 'owner', 'admin', 'agent', 'viewer'
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  org            Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, orgId])
-}
-
+// Existing models, updated to reference Profile where applicable
 model Lead {
-  id             String    @id @default(cuid())
-  source         String
-  title          String
-  summary        String?
-  rawUrl         String    @unique
-  author         String?
-  company        String?
-  location       String?
-  budget         String?
-  techStack      String[]  @default([]) @db.Array(Text)
-  createdAt      DateTime  @default(now())
-  discoveredAt   DateTime  @default(now())
-  score          Float     @default(0.0)
-  status         String    @default("new") // e.g., 'new', 'claimed', 'contacted', 'replied', 'won', 'lost'
+  id          String      @id @default(cuid())
+  source      String
+  title       String
+  summary     String?
+  rawUrl      String      @unique
+  author      String?
+  company     String?
+  location    String?
+  budget      String?
+  techStack   String[]    @default([]) @db.Text
+  createdAt   DateTime    @default(now())
+  discoveredAt DateTime   @default(now())
+  score       Float       @default(0.0)
+  status      String      @default("new")
+  userId      String?     @db.Uuid // Changed to UUID
+  orgId       String?
 
-  // Relationships
-  userId         String? // User who discovered/claimed this lead
-  orgId          String? // Organization this lead belongs to
-  user           User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  org            Org?      @relation(fields: [orgId], references: [id], onDelete: SetNull)
+  // Relationship to Profile
+  user        Profile?    @relation(fields: [userId], references: [id])
 
-  enrichments    LeadEnrichment[]
-  scores         LeadScore[]
-  claims         LeadClaim[]
-  contacts       LeadContact[]
-  notes          LeadNote[]
-  sequenceEvents SequenceEvent[]
+  leadEnrichments LeadEnrichment[]
+  leadScores      LeadScore[]
+  leadClaims      LeadClaim[]
+  leadContacts    LeadContact[]
+  leadNotes       LeadNote[]
 
-  @@index([createdAt(sort: Desc)])
-  @@index([score(sort: Desc)])
-  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin) // For trigram search
-  @@index([summary(ops: raw("gin_trgm_ops"))], type: Gin) // For trigram search
+  @@map("lead")
 }
 
 model LeadEnrichment {
-  id             String    @id @default(cuid())
-  leadId         String
-  provider       String
-  data           Json
-  createdAt      DateTime  @default(now())
+  id        String    @id @default(cuid())
+  leadId    String
+  provider  String
+  data      Json
+  createdAt DateTime  @default(now())
 
-  lead           Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  lead      Lead      @relation(fields: [leadId], references: [id])
+
+  @@map("leadenrichment")
 }
 
 model LeadScore {
-  id             String    @id @default(cuid())
-  leadId         String
-  ruleScore      Float
-  mlScore        Float
-  finalScore     Float
-  version        String    @default("v1")
-  createdAt      DateTime  @default(now())
+  id        String    @id @default(cuid())
+  leadId    String
+  ruleScore Float
+  mlScore   Float
+  finalScore Float
+  version   String    @default("v1")
+  createdAt DateTime  @default(now())
 
-  lead           Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  lead      Lead      @relation(fields: [leadId], references: [id])
+
+  @@map("leadscore")
 }
 
 model LeadClaim {
-  id             String    @id @default(cuid())
-  leadId         String
-  userId         String
-  claimedAt      DateTime  @default(now())
+  id        String    @id @default(cuid())
+  leadId    String
+  userId    String    @db.Uuid // Changed to UUID
+  claimedAt DateTime  @default(now())
 
-  lead           Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lead      Lead      @relation(fields: [leadId], references: [id])
+  user      Profile   @relation(fields: [userId], references: [id]) // Relationship to Profile
 
-  @@unique([leadId, userId])
+  @@map("leadclaim")
 }
 
 model LeadContact {
-  id             String    @id @default(cuid())
-  leadId         String
-  type           String    // e.g., 'email', 'linkedin', 'twitter', 'github'
-  value          String
-  confidence     Float     @default(0.0) // 0.0 to 1.0
-  verifiedAt     DateTime?
-  createdAt      DateTime  @default(now())
+  id         String    @id @default(cuid())
+  leadId     String
+  type       String
+  value      String
+  confidence Float     @default(0.0)
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
 
-  lead           Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  lead       Lead      @relation(fields: [leadId], references: [id])
+
+  @@map("leadcontact")
 }
 
 model LeadNote {
-  id             String    @id @default(cuid())
-  leadId         String
-  userId         String
-  content        String
-  createdAt      DateTime  @default(now())
+  id        String    @id @default(cuid())
+  leadId    String
+  userId    String    @db.Uuid // Changed to UUID
+  content   String
+  createdAt DateTime  @default(now())
 
-  lead           Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lead      Lead      @relation(fields: [leadId], references: [id])
+  user      Profile   @relation(fields: [userId], references: [id]) // Relationship to Profile
+
+  @@map("leadnote")
 }
 
 model Webhook {
-  id             String    @id @default(cuid())
-  orgId          String
-  event          String    // e.g., 'lead.qualified', 'lead.claimed'
-  url            String
-  secret         String    // For HMAC signing
-  isActive       Boolean   @default(true)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id          String           @id @default(cuid())
+  orgId       String
+  event       String
+  url         String
+  secret      String
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
-  org            Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  deliveries     WebhookDelivery[]
+  webhookDeliveries WebhookDelivery[]
+
+  @@map("webhook")
 }
 
 model WebhookDelivery {
-  id             String    @id @default(cuid())
-  webhookId      String
-  payload        Json
-  status         String    // e.g., 'pending', 'success', 'failed'
-  statusCode     Int?
-  response       String?
-  attempts       Int       @default(0)
-  lastAttemptAt  DateTime  @default(now())
+  id            String           @id @default(cuid())
+  webhookId     String
+  payload       Json
+  status        String
+  statusCode    Int?
+  response      String?
+  attempts      Int              @default(0)
+  lastAttemptAt DateTime         @default(now())
 
-  webhook        Webhook   @relation(fields: [webhookId], references: [id], onDelete: Cascade)
-  attemptsHistory WebhookAttempt[]
+  webhook       Webhook          @relation(fields: [webhookId], references: [id])
+  webhookAttempts WebhookAttempt[]
+
+  @@map("webhookdelivery")
 }
 
 model WebhookAttempt {
-  id             String    @id @default(cuid())
-  deliveryId     String
-  attemptNumber  Int
-  statusCode     Int?
-  response       String?
-  attemptedAt    DateTime  @default(now())
+  id          String    @id @default(cuid())
+  deliveryId  String
+  attemptNumber Int
+  statusCode  Int?
+  response    String?
+  attemptedAt DateTime  @default(now())
 
-  delivery       WebhookDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  webhookDelivery WebhookDelivery @relation(fields: [deliveryId], references: [id])
+
+  @@map("webhookattempt")
+}
+
+model Org {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  memberships Membership[]
+  leads       Lead[]       @relation("OrgLeads")
+  auditLogs   AuditLog[]
+  webhooks    Webhook[]
+
+  @@map("org")
+}
+
+model Membership {
+  id          String    @id @default(cuid())
+  userId      String    @db.Uuid // Changed to UUID
+  orgId       String
+  role        String    @default("viewer")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        Profile   @relation(fields: [userId], references: [id]) // Relationship to Profile
+  org         Org       @relation(fields: [orgId], references: [id])
+
+  @@map("membership")
 }
 
 model AuditLog {
-  id             String    @id @default(cuid())
-  orgId          String?
-  userId         String?
-  action         String
-  entityType     String
-  entityId       String
-  payload        Json
-  ipAddress      String?
-  createdAt      DateTime  @default(now())
+  id          String    @id @default(cuid())
+  orgId       String?
+  userId      String?   @db.Uuid // Changed to UUID
+  action      String
+  entityType  String
+  entityId    String
+  payload     Json
+  ipAddress   String?
+  createdAt   DateTime  @default(now())
 
-  org            Org?      @relation(fields: [orgId], references: [id], onDelete: SetNull)
-  user           User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user        Profile?  @relation(fields: [userId], references: [id]) // Relationship to Profile
+  org         Org?      @relation(fields: [orgId], references: [id])
 
-  @@index([createdAt(sort: Desc)])
+  @@map("auditlog")
 }
 
-// Add other models as needed based on the full spec (e.g., Providers, Jobs, Runs, RateLimits, Sequences, etc.)
+model Keyword {
+  id          String    @id @default(cuid())
+  createdAt   DateTime? @default(now())
+  keyword     String
+  volume      Int?      @default(0)
+  difficulty  Int?      @default(0)
+  intent      String?   @default("informational")
+  status      String?   @default("active")
+
+  @@map("keywords")
+}
+
+model Backlink {
+  id            String    @id @default(cuid())
+  createdAt     DateTime? @default(now())
+  url           String
+  domain        String
+  domainAuthority Int?    @default(0) @map("domain_authority")
+  status        String?   @default("pending")
+  anchorText    String?   @map("anchor_text")
+  platform      String?   @default("custom")
+
+  @@map("backlinks")
+}
+
+model SeoMetric {
+  id            String    @id @default(cuid())
+  createdAt     DateTime? @default(now())
+  indexedPages  Int?      @default(0) @map("indexed_pages")
+  rankings      Int?      @default(0)
+  backlinks     Int?      @default(0)
+  traffic       Int?      @default(0)
+  updatedAt     DateTime? @default(now()) @map("updated_at")
+
+  @@map("seo_metrics")
+}

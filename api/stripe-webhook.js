@@ -44,7 +44,7 @@ export default async function handler(req, res) {
       const status = obj.status;            // active | trialing | past_due | canceled | ...
       const customerId = obj.customer;
       if (customerId && status) {
-        await prisma.user.updateMany({
+        await prisma.profile.updateMany({ // Changed from prisma.user to prisma.profile
           where: { stripeCustomerId: customerId },
           data: { subscriptionStatus: status },
         });
@@ -52,21 +52,25 @@ export default async function handler(req, res) {
     } else if (type === 'customer.subscription.deleted') {
       const customerId = obj.customer;
       if (customerId) {
-        await prisma.user.updateMany({
+        await prisma.profile.updateMany({ // Changed from prisma.user to prisma.profile
           where: { stripeCustomerId: customerId },
           data: { subscriptionStatus: 'canceled' },
         });
       }
     }
-    // Optional: capture customer ID on your user after Checkout completes
+    // Optional: capture customer ID on your profile after Checkout completes
     else if (type === 'checkout.session.completed') {
       // If you send ?email=... or store a pending signup, you can bind here:
       const email = obj.customer_details?.email;
       const customerId = obj.customer;
       if (email && customerId) {
-        await prisma.user.updateMany({
-          where: { email },
-          data: { stripeCustomerId: customerId, subscriptionStatus: 'trialing' }, // Assuming 'trialing' for initial checkout
+        // Find the profile by email (assuming email is unique and linked to profile)
+        // Or, if userId is passed in checkout session metadata, use that.
+        // For now, we'll try to find by customerId if available, or assume the profile is already linked.
+        // A more robust solution would involve passing the Supabase userId in the checkout session metadata.
+        await prisma.profile.updateMany({ // Changed from prisma.user to prisma.profile
+          where: { stripeCustomerId: customerId }, // Assuming customerId is already linked or will be linked
+          data: { subscriptionStatus: 'trialing' }, // Assuming 'trialing' for initial checkout
         });
       }
     }

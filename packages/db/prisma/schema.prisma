@@ -32,7 +32,7 @@ model Profile {
   @@map("profiles")
 }
 
-// Existing models, updated to reference Profile where applicable
+-- Existing models, updated to reference Profile where applicable
 model Lead {
   id          String      @id @default(cuid())
   source      String
